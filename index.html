@@ -263,6 +263,13 @@ header{display:flex;align-items:center;justify-content:space-between;gap:10px}
 @media (max-width:380px){.logo{font-size:25px}.hbtns{gap:6px}.ibtn{min-width:36px;padding:0 9px;font-size:14px}#say1{font-size:19px}.tray{gap:12px;padding:12px 14px}.chip{padding-inline:2px}.who b{font-size:13px}}
 @media (max-width:340px){.logo{font-size:22px}.biglogo{font-size:46px}}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+
+/* online: stanza con codice */
+.code{margin:0 0 16px;padding:14px 8px;border-radius:20px;background:var(--cl);box-shadow:inset 0 0 0 3px var(--c);font:800 44px/1 var(--display);letter-spacing:.14em;text-indent:.14em;color:var(--ink);user-select:text;-webkit-user-select:text}
+.codein{display:block;width:100%;margin:0 0 16px;padding:12px 8px;border:0;border-radius:20px;background:#f4f0ff;box-shadow:inset 0 0 0 3px var(--lip);font:800 34px/1 var(--display);letter-spacing:.14em;text-indent:.14em;text-align:center;text-transform:uppercase;color:var(--ink);user-select:text;-webkit-user-select:text}
+.codein::placeholder{color:#b9aee6;letter-spacing:.06em}
+.netmsg{min-height:1.4em;margin:14px 0 0;color:var(--ink-soft)}
+.netcard h2,#lost h2{margin:6px 0 4px;font:800 28px/1.1 var(--display)}
 </style>
 </head>
 <body>
@@ -313,6 +320,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:10px}
       <button class="mode c3" data-mode="cpu2"><b>Sfida 1 contro 1</b><small>Tu contro una CPU</small></button>
       <button class="mode c2" data-mode="duo"><b>2 giocatori, un telefono</b><small>Tu e un amico, a turno</small></button>
       <button class="mode c1" data-mode="friends"><b>Amici, un solo telefono</b><small>4 giocatori a turno</small></button>
+      <button class="mode c4" id="onlineBtn"><b>Online con un amico</b><small>Due telefoni, un codice</small></button>
     </div>
     <button class="link" id="rulesLink">Come si gioca</button>
   </div>
@@ -335,7 +343,45 @@ header{display:flex;align-items:center;justify-content:space-between;gap:10px}
       <li><b>Scatto</b> avanti di 3, <b>Tiro extra</b>, <b>Scudo</b> contro le prese fino al tuo prossimo turno.</li>
       <li><b>Buca</b> indietro di 3, oppure <b>salti un turno</b>.</li>
     </ul>
+    <h3>Online con un amico</h3>
+    <ul>
+      <li>Uno crea la stanza e passa il <b>codice</b> (o il link) all'altro: poi ognuno gioca dal suo telefono.</li>
+      <li>Se uno dei due esce o perde la connessione, la partita finisce.</li>
+    </ul>
     <div class="modes"><button class="mode c0" id="rulesOk"><b>Ho capito</b></button></div>
+  </div>
+</div>
+
+<div class="overlay" id="net" hidden>
+  <div class="card netcard c4">
+    <h2>Online con un amico</h2>
+    <div id="netChoose">
+      <p class="tag">Ognuno gioca dal suo telefono.</p>
+      <div class="modes">
+        <button class="mode c0" id="netHost"><b>Crea una stanza</b><small>Ricevi un codice da dare all'amico</small></button>
+        <button class="mode c3" id="netJoin"><b>Entra con un codice</b><small>Scrivi il codice del tuo amico</small></button>
+      </div>
+    </div>
+    <div id="netHostView" hidden>
+      <p class="tag">Dai questo codice al tuo amico</p>
+      <div class="code" id="netCode" aria-live="polite">&middot;&middot;&middot;&middot;&middot;</div>
+      <div class="modes"><button class="mode c3" id="netShare"><b>Invia all'amico</b><small>Condividi il link per entrare</small></button></div>
+    </div>
+    <div id="netJoinView" hidden>
+      <p class="tag">Scrivi il codice del tuo amico</p>
+      <input class="codein" id="netIn" maxlength="5" autocapitalize="characters" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Codice della stanza" placeholder="CODICE">
+      <div class="modes"><button class="mode c1" id="netGo"><b>Entra</b></button></div>
+    </div>
+    <p class="netmsg" id="netMsg" role="status"></p>
+    <button class="link" id="netBack">Indietro</button>
+  </div>
+</div>
+
+<div class="overlay" id="lost" hidden>
+  <div class="card">
+    <h2 id="lostT"></h2>
+    <p class="tag" id="lostS"></p>
+    <div class="modes"><button class="mode c0" id="lostOk"><b>Torna al menu</b></button></div>
   </div>
 </div>
 
@@ -358,7 +404,10 @@ const $=s=>document.querySelector(s);
 const NAMES=['Pesca','Menta','Limone','Nuvola'];
 const PAWN='<span class="pawn"><i class="x"></i><i class="y"></i><i class="e"></i><i class="e r"></i><i class="m"></i></span>';
 const SKINS=[['ovetti','Ovetti'],['animali','Animali'],['mostri','Mostriciattoli'],['robot','Robottini']];
-const MODE_LABEL={cpu4:'Tu contro 3 CPU',cpu2:'Sfida 1 contro 1',duo:'2 giocatori',friends:'4 amici'};
+const MODE_LABEL={cpu4:'Tu contro 3 CPU',cpu2:'Sfida 1 contro 1',duo:'2 giocatori',friends:'4 amici',online:'Online con un amico'};
+const PEER_SRC='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+const PEER_SRI='sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR';
+const ROOM_PREFIX='ludopop-',ROOM_CHARS='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /* percorso: 52 caselle in senso orario, da (riga,colonna) con passo (dr,dc) */
 const SEGS=[[6,1,0,1,5],[5,6,-1,0,6],[0,7,0,1,2],[1,8,1,0,5],[6,9,0,1,6],[7,14,1,0,2],[8,13,0,-1,5],[9,8,1,0,6],[14,7,0,-1,2],[13,6,-1,0,5],[8,5,0,-1,6],[7,0,-1,0,2]];
@@ -382,6 +431,10 @@ const trk=(pi,p)=>(START[pi]+p-1)%52;
 
 let G=null,epoch=0,pending=null,canSet=new Set(),moving=null,started=false,muted=false,AC=null,turnPi=0;
 let chaosOn=false,fastOn=false,paused=false,skin='ovetti';
+/* online: dadi e imprevisti escono da un generatore con seme condiviso, cosi' i due telefoni giocano la stessa partita */
+let rnd=Math.random;
+const NET={peer:null,conn:null,host:false,open:false,inbox:[],last:0,hb:0,to:0};
+function seeded(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const PE={},TC=[];
 const dieEl=$('#die'),pipsEl=$('#pips');
 
@@ -394,12 +447,13 @@ const store={
 };
 function savePrefs(){store.set(PKEY,{chaos:chaosOn,fast:fastOn,muted,skin});}
 function save(){
+  if(G&&G.mode==='online')return;
   if(!G||G.over){store.del(SKEY);return;}
   store.set(SKEY,{mode:G.mode,chaos:G.chaos,pos:G.pos,cur:G.cur,skip:[...G.skip],shield:[...G.shield]});
 }
 function loadSaved(){
   const s=store.get(SKEY);
-  if(!s||!MODE_LABEL[s.mode]||!Array.isArray(s.pos)||s.pos.length!==4)return null;
+  if(!s||s.mode==='online'||!MODE_LABEL[s.mode]||!Array.isArray(s.pos)||s.pos.length!==4)return null;
   const ok=s.pos.every(a=>Array.isArray(a)&&a.length===4&&a.every(p=>Number.isInteger(p)&&p>=0&&p<=57));
   const n=(s.mode==='cpu2'||s.mode==='duo')?2:4;
   if(!ok||!Number.isInteger(s.cur)||s.cur<0||s.cur>=n)return null;
@@ -414,7 +468,7 @@ const sleep=ms=>{
     e===epoch?res():rej('x');
   },ms*(fastOn?.55:1)));
 };
-function updatePause(){paused=!!(started&&G&&!G.over&&(!$('#menu').hidden||!$('#rules').hidden||document.hidden));}
+function updatePause(){paused=!!(started&&G&&!G.over&&(!$('#menu').hidden||!$('#rules').hidden||!$('#net').hidden||document.hidden));}
 function ov(id,show){$('#'+id).hidden=!show;updatePause();}
 document.addEventListener('visibilitychange',updatePause);
 
@@ -528,8 +582,11 @@ function hop(pi,i){
 
 /* interfaccia */
 const solo=()=>G.mode==='cpu4'||G.mode==='cpu2';
+const online=()=>G.mode==='online';
 const isCpu=pi=>solo()&&pi!==0;
-const label=pi=>(solo()&&pi===0)?'Tu':NAMES[pi];
+const isRemote=pi=>online()&&pi!==G.seat;
+const mine=pi=>online()?pi===G.seat:(solo()&&pi===0);
+const label=pi=>mine(pi)?'Tu':NAMES[pi];
 function say(a,b){$('#say1').textContent=a;$('#say2').textContent=b||'';}
 function toast(t){const el=$('#toast');el.textContent=t;el.classList.remove('show');void el.offsetWidth;el.classList.add('show');}
 function showFace(v){
@@ -561,7 +618,7 @@ function setBases(){
 async function rollDie(){
   dieEl.classList.remove('land');dieEl.classList.add('rolling');sfx('roll');
   for(let k=0;k<8;k++){showFace(1+Math.floor(Math.random()*6));await sleep(80);}
-  const v=1+Math.floor(Math.random()*6);
+  const v=1+Math.floor(rnd()*6);
   showFace(v);dieEl.classList.remove('rolling');void dieEl.offsetWidth;dieEl.classList.add('land');
   return v;
 }
@@ -663,7 +720,7 @@ async function slide(pi,i,t){
 
 async function surprise(pi,i){
   const kinds=['jump','jump','extra','extra','shield','pit','pit','skip'];
-  const k=kinds[Math.floor(Math.random()*kinds.length)];
+  const k=kinds[Math.floor(rnd()*kinds.length)];
   const arr=G.pos[pi];let cap=0,bonus=false;
   await sleep(250);
   if(k==='jump'){toast('Scatto! +3');sfx('home');await slide(pi,i,Math.min(arr[i]+3,51));cap=await capture(pi,arr[i]);}
@@ -676,10 +733,10 @@ async function surprise(pi,i){
 }
 
 /* partita */
-const fa=(pi,v)=>(solo()&&pi===0)?'Hai fatto '+v:NAMES[pi]+' fa '+v;
+const fa=(pi,v)=>mine(pi)?'Hai fatto '+v:NAMES[pi]+' fa '+v;
 
 async function playerTurn(pi){
-  const cpu=isCpu(pi);let sixes=0;
+  const cpu=isCpu(pi),rem=isRemote(pi);let sixes=0;
   if(G.skip.has(pi)){
     G.skip.delete(pi);setTurnUI(pi);dieEl.disabled=true;
     say(label(pi)==='Tu'?'Salti il turno':NAMES[pi]+' salta il turno','Era finito su una casella ?');await sleep(1300);return;
@@ -689,10 +746,13 @@ async function playerTurn(pi){
   for(;;){
     setTurnUI(pi);dieEl.disabled=true;
     if(cpu){say(NAMES[pi]+' tira il dado','');await sleep(650);}
+    else if(rem){say('Tocca a '+NAMES[pi],'Aspetta il suo tiro');await netNext('die');}
     else{
       const out=G.pos[pi].some(p=>p>0&&p<57);
-      say(solo()?'Tocca a te!':'Tocca a '+NAMES[pi],out?'Tocca il dado per tirare':'Serve un 6 per far uscire una pedina');
+      say(mine(pi)?'Tocca a te!':'Tocca a '+NAMES[pi],out?'Tocca il dado per tirare':'Serve un 6 per far uscire una pedina');
+      const h=sig();
       await dieTap();
+      if(online())netSend({k:'die',h});
     }
     const v=await rollDie();
     sixes=v===6?sixes+1:0;
@@ -703,7 +763,17 @@ async function playerTurn(pi){
     let mv;
     if(cpu){say(fa(pi,v),'');await sleep(450);mv=aiPick(pi,moves);}
     else if(uniq.length===1){say(fa(pi,v),'');await sleep(420);mv=uniq[0];}
-    else{say(fa(pi,v),'Tocca una pedina che brilla');mv=await pickMove(pi,moves);}
+    else if(rem){
+      say(fa(pi,v),'Sceglie quale pedina muovere');
+      const m=await netNext('pick');
+      mv=moves.find(x=>x.i===m.i);
+      if(!mv){netLost('Partita non allineata','Qualcosa non torna. Iniziate una nuova partita.');return;}
+    }
+    else{
+      say(fa(pi,v),'Tocca una pedina che brilla');
+      mv=await pickMove(pi,moves);
+      if(online())netSend({k:'pick',i:mv.i});
+    }
     const r=await doMove(pi,mv);
     save();
     if(G.pos[pi].every(p=>p===57)){win(pi);return;}
@@ -723,12 +793,18 @@ async function loop(){
   }catch(e){if(e!=='x')console.error(e);}
 }
 
-function newGame(mode,run,chaos,st){
+function stopGame(){
   epoch++;
   if(pending){const p=pending;pending=null;try{p.rej('x');}catch(e){}}
   canSet=new Set();moving=null;
-  const act=(mode==='cpu2'||mode==='duo')?[0,2]:[0,1,2,3];
-  G={mode,act,pos:[0,1,2,3].map(()=>[0,0,0,0]),cur:0,over:false,chaos:!!chaos,skip:new Set(),shield:new Set()};
+}
+
+function newGame(mode,run,chaos,st,net){
+  stopGame();
+  if(mode!=='online')netReset(true);
+  const act=(mode==='cpu2'||mode==='duo'||mode==='online')?[0,2]:[0,1,2,3];
+  rnd=net?seeded(net.seed):Math.random;
+  G={mode,act,pos:[0,1,2,3].map(()=>[0,0,0,0]),cur:0,over:false,chaos:!!chaos,skip:new Set(),shield:new Set(),seat:net?net.seat:0};
   if(st){G.pos=st.pos.map(a=>a.slice());G.cur=st.cur;G.skip=new Set(st.skip||[]);G.shield=new Set(st.shield||[]);}
   TC.forEach((el,i)=>el.classList.toggle('surprise',!!chaos&&SURP.includes(i)));
   turnPi=act[G.cur];
@@ -742,11 +818,12 @@ function newGame(mode,run,chaos,st){
 
 function win(pi){
   G.over=true;save();updatePause();sfx('win');
-  const mine=solo()&&pi===0;
+  const won=mine(pi),vs=solo()||online();
   $('#winPawn').className='mini big c'+pi;$('#winPawn').innerHTML=PAWN;
-  $('#winTitle').textContent=mine?'Hai vinto!':(solo()?'Ha vinto '+NAMES[pi]:NAMES[pi]+' ha vinto!');
-  $('#winSub').textContent=mine?'Tutte e 4 le pedine sono a casa.':(solo()?'Ritenta, il dado ti sorride la prossima volta.':'Tutte e 4 le pedine sono a casa.');
-  say(mine?'Hai vinto!':NAMES[pi]+' ha vinto','');
+  $('#winTitle').textContent=won?'Hai vinto!':(vs?'Ha vinto '+NAMES[pi]:NAMES[pi]+' ha vinto!');
+  $('#winSub').textContent=won?'Tutte e 4 le pedine sono a casa.':(vs?'Ritenta, il dado ti sorride la prossima volta.':'Tutte e 4 le pedine sono a casa.');
+  say(won?'Hai vinto!':NAMES[pi]+' ha vinto','');
+  updateAgain();
   confetti();$('#win').hidden=false;
 }
 function confetti(){
@@ -781,8 +858,175 @@ $('#menuBtn').onclick=showMenu;
 $('#helpBtn').onclick=()=>ov('rules',true);
 $('#rulesLink').onclick=()=>ov('rules',true);
 $('#rulesOk').onclick=()=>ov('rules',false);
-$('#again').onclick=()=>{unlock();newGame(G.mode,true,G.chaos);};
-$('#toMenu').onclick=()=>{$('#win').hidden=true;clearConfetti();showMenu();};
+$('#again').onclick=()=>{
+  unlock();
+  if(online()){
+    if(!NET.open)return;
+    if(NET.host)rematch();
+    else{netSend({k:'again'});$('#again').disabled=true;$('#again').querySelector('b').textContent='Aspetto il tuo amico...';}
+    return;
+  }
+  newGame(G.mode,true,G.chaos);
+};
+$('#toMenu').onclick=()=>{if(online())netReset(true);$('#win').hidden=true;clearConfetti();showMenu();};
+
+/* online: la stanza e' un codice, i telefoni si collegano direttamente (PeerJS) e si scambiano solo i tocchi */
+const sig=()=>G.pos.map(a=>a.join(',')).join('|')+':'+G.cur+':'+[...G.shield].sort().join(',');
+const netMsg=t=>{$('#netMsg').textContent=t||'';};
+const newSeed=()=>(Math.random()*4294967296)>>>0;
+function netSend(m){try{if(NET.conn&&NET.open)NET.conn.send(m);}catch(e){}}
+function netView(v){['Choose','HostView','JoinView'].forEach(n=>{$('#net'+n).hidden=n!==v;});netMsg('');}
+
+let peerLoad=null;
+function loadPeer(){
+  if(window.Peer)return Promise.resolve();
+  if(!peerLoad)peerLoad=new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src=PEER_SRC;s.integrity=PEER_SRI;s.crossOrigin='anonymous';
+    s.onload=()=>{if(window.Peer)res();else{peerLoad=null;rej(new Error('peer'));}};
+    s.onerror=()=>{peerLoad=null;s.remove();rej(new Error('peer'));};
+    document.head.append(s);
+  });
+  return peerLoad;
+}
+
+function netReset(bye){
+  clearInterval(NET.hb);clearTimeout(NET.to);
+  const c=NET.conn,p=NET.peer;
+  NET.conn=null;NET.peer=null;NET.open=false;NET.inbox=[];NET.code='';
+  if(bye&&c&&c.open)try{c.send({k:'bye'});}catch(e){}
+  setTimeout(()=>{try{c&&c.close();}catch(e){}try{p&&p.destroy();}catch(e){}},bye&&c?300:0);
+}
+
+function netLost(title,sub){
+  const was=NET.open;
+  netReset(false);
+  if(!$('#net').hidden){netMsg(sub||'Il tuo amico si e\' disconnesso.');return;}
+  if(!G||G.mode!=='online'||!was)return;
+  if(G.over){updateAgain();return;}
+  stopGame();G.over=true;updatePause();
+  $('#lostT').textContent=title||'Amico disconnesso';
+  $('#lostS').textContent=sub||'La connessione si e\' interrotta, la partita finisce qui.';
+  ov('lost',true);
+}
+
+/* attende il gesto dell'altro giocatore (tiro o scelta della pedina) */
+function netNext(kind){
+  return new Promise((res,rej)=>{pending={kind:'remote',want:kind,res,rej};netPump();});
+}
+function netPump(){
+  if(!pending||pending.kind!=='remote'||!NET.inbox.length)return;
+  const m=NET.inbox.shift(),p=pending;pending=null;
+  if(m.k!==p.want||(m.k==='die'&&m.h!==sig())||(m.k==='pick'&&!Number.isInteger(m.i))){
+    netLost('Partita non allineata','Qualcosa non torna. Iniziate una nuova partita.');return;
+  }
+  p.res(m);
+}
+
+function netData(c,m){
+  if(c!==NET.conn||!m||typeof m!=='object')return;
+  NET.last=Date.now();
+  if(m.k==='die'||m.k==='pick'){if(NET.inbox.length<50){NET.inbox.push(m);netPump();}}
+  else if(m.k==='start'){if(!NET.host&&Number.isInteger(m.seed))startOnline(m.seed>>>0,!!m.chaos);}
+  else if(m.k==='again'){if(NET.host&&G&&G.mode==='online'&&G.over)rematch();}
+  else if(m.k==='bye')netLost('Amico uscito','Il tuo amico ha lasciato la partita.');
+}
+
+function startOnline(seed,chaos){
+  NET.inbox=[];
+  ov('net',false);ov('lost',false);
+  newGame('online',true,chaos,null,{seed,seat:NET.host?0:2});
+}
+function rematch(){
+  const seed=newSeed(),chaos=G.chaos;
+  netSend({k:'start',seed,chaos});
+  startOnline(seed,chaos);
+}
+
+function netOpened(c){
+  if(c!==NET.conn||NET.open)return;
+  NET.open=true;NET.last=Date.now();clearTimeout(NET.to);
+  NET.hb=setInterval(()=>{
+    netSend({k:'ping'});
+    if(Date.now()-NET.last>15000)netLost('Connessione persa','Non arrivano piu\' notizie dal tuo amico.');
+  },3000);
+  if(NET.host){const seed=newSeed();netSend({k:'start',seed,chaos:chaosOn});startOnline(seed,chaosOn);}
+  else netMsg('Collegato! Si parte...');
+}
+function netAdopt(c){
+  NET.conn=c;
+  c.on('open',()=>netOpened(c));
+  c.on('data',m=>netData(c,m));
+  c.on('close',()=>{if(NET.conn===c)netLost();});
+  c.on('error',()=>{if(NET.conn===c)netLost();});
+  if(c.open)netOpened(c);
+}
+
+function openNet(view,code){
+  ov('menu',false);ov('rules',false);netReset(false);netView(view);
+  $('#netIn').value=code||'';
+  ov('net',true);
+}
+async function netHost(){
+  netReset(false);NET.host=true;netView('HostView');
+  $('#netCode').textContent='·····';netMsg('Preparo la stanza...');
+  try{await loadPeer();}catch(e){netMsg('Non riesco a collegarmi al servizio. Controlla la connessione e riprova.');return;}
+  if($('#net').hidden||NET.host!==true)return;
+  let tries=0;
+  const make=()=>{
+    const code=Array.from(crypto.getRandomValues(new Uint8Array(5)),b=>ROOM_CHARS[b%ROOM_CHARS.length]).join('');
+    const peer=new Peer(ROOM_PREFIX+code);NET.peer=peer;
+    peer.on('open',()=>{if(NET.peer!==peer)return;$('#netCode').textContent=code;NET.code=code;netMsg('Aspetto il tuo amico...');});
+    peer.on('connection',c=>{if(NET.peer!==peer)return;if(NET.conn){c.close();return;}netAdopt(c);});
+    peer.on('error',e=>{
+      if(NET.peer!==peer)return;
+      if(e.type==='unavailable-id'&&++tries<4){NET.peer=null;peer.destroy();make();return;}
+      if(!NET.open&&!$('#net').hidden){netReset(false);netMsg('La stanza non si apre. Riprova tra un attimo.');}
+    });
+  };
+  make();
+}
+async function netJoin(raw){
+  const code=String(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(code.length!==5){netMsg('Il codice ha 5 caratteri.');return;}
+  netReset(false);NET.host=false;netMsg('Mi collego...');
+  try{await loadPeer();}catch(e){netMsg('Non riesco a collegarmi al servizio. Controlla la connessione e riprova.');return;}
+  if($('#net').hidden)return;
+  const peer=new Peer();NET.peer=peer;
+  peer.on('open',()=>{
+    if(NET.peer!==peer)return;
+    netAdopt(peer.connect(ROOM_PREFIX+code,{reliable:true}));
+    NET.to=setTimeout(()=>{if(NET.peer===peer&&!NET.open){netReset(false);netMsg('Non trovo la stanza. Controlla il codice.');}},15000);
+  });
+  peer.on('error',e=>{
+    if(NET.peer!==peer||NET.open)return;
+    netReset(false);
+    netMsg(e.type==='peer-unavailable'?'Non trovo questa stanza. Controlla il codice.':'Collegamento non riuscito. Riprova.');
+  });
+}
+function updateAgain(){
+  const b=$('#again'),t=b.querySelector('b');
+  if(!G||G.mode!=='online'){b.disabled=false;t.textContent='Rigioca';return;}
+  b.disabled=!NET.open;t.textContent=NET.open?'Rigioca':'Il tuo amico e\' uscito';
+}
+
+$('#onlineBtn').onclick=()=>openNet('Choose');
+$('#netHost').onclick=netHost;
+$('#netJoin').onclick=()=>{netView('JoinView');$('#netIn').focus();};
+$('#netGo').onclick=()=>netJoin($('#netIn').value);
+$('#netIn').addEventListener('keydown',e=>{if(e.key==='Enter')netJoin($('#netIn').value);});
+$('#netBack').onclick=()=>{netReset(false);ov('net',false);showMenu();};
+$('#netShare').onclick=async()=>{
+  if(!NET.code)return;
+  const url=location.href.split(/[?#]/)[0]+'?stanza='+NET.code;
+  const text='Giochiamo a Ludo Pop! Codice stanza: '+NET.code;
+  try{
+    if(navigator.share){await navigator.share({title:'Ludo Pop',text,url});}
+    else{await navigator.clipboard.writeText(text+' '+url);netMsg('Link copiato!');}
+  }catch(e){}
+};
+$('#lostOk').onclick=()=>{ov('lost',false);showMenu();};
+window.addEventListener('pagehide',()=>{if(NET.open)netReset(true);});
 
 /* avvio */
 const pr=store.get(PKEY)||{};
@@ -802,6 +1046,12 @@ buildBoard();
 const saved=loadSaved();
 if(saved)newGame(saved.mode,false,saved.chaos,saved);else newGame('cpu4',false,false);
 if(saved){$('#cont').hidden=false;$('#contSub').textContent=MODE_LABEL[saved.mode]+(saved.chaos?' · con imprevisti':'');}
+/* link dell'amico: ?stanza=CODICE entra subito nella stanza */
+const room=(new URLSearchParams(location.search).get('stanza')||'').toUpperCase();
+if(/^[A-Z2-9]{5}$/.test(room)){
+  try{history.replaceState(null,'',location.href.split(/[?#]/)[0]);}catch(e){}
+  openNet('JoinView',room);netJoin(room);
+}
 })();
 </script>
 </body>
