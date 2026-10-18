@@ -4,7 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Ludo Pop</title>
-<meta name="description" content="Ludo Pop: il Ludo carino da giocare contro la CPU o con gli amici sullo stesso telefono.">
+<meta name="description" content="Ludo Pop: il Ludo carino da giocare contro la CPU, con gli amici sullo stesso telefono o online con un codice.">
+<meta name="theme-color" content="#e8e2ff">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="it_IT">
+<meta property="og:site_name" content="Ludo Pop">
+<meta property="og:title" content="Ludo Pop">
+<meta property="og:description" content="Il Ludo carino: contro la CPU, con gli amici o online con un codice.">
+<meta property="og:url" content="https://alessiotoma8.github.io/ludopop/">
+<meta property="og:image" content="https://alessiotoma8.github.io/ludopop/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Ludo Pop: quattro pedine sorridenti e il titolo colorato">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
@@ -62,6 +74,12 @@ header{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .chips{display:flex;gap:6px;justify-content:center}
 .chip{flex:1 1 0;min-width:0;max-width:130px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:15px 4px 9px;border-radius:18px;background:#fff;box-shadow:0 3px 0 var(--lip);transition:transform .2s,background .2s,box-shadow .2s}
 .chip.on{background:var(--c);box-shadow:0 4px 0 var(--cd);transform:translateY(-3px)}
+.chip{position:relative}
+/* online: pallino di connessione sul giocatore dell'altro telefono */
+.chip.rem::after{content:"";position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;background:#b7b0d6;box-shadow:0 0 0 2px #fff}
+#chips[data-net=ok] .chip.rem::after{background:#2fcf93}
+#chips[data-net=slow] .chip.rem::after{background:#ffc73a;animation:pulse 1s ease-in-out infinite}
+#chips[data-net=off] .chip.rem::after{background:#ff4d6a}
 .who{min-width:0;max-width:100%;display:flex;flex-direction:column;align-items:center;gap:5px}
 .who b{display:block;max-width:100%;font:800 14px/1 var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dots{display:flex;gap:3px}
@@ -496,6 +514,7 @@ function sfx(k){
   else if(k==='cap'){tone(440,0,.12,'sawtooth',.05);tone(300,.1,.12,'sawtooth',.05);tone(200,.2,.2,'sawtooth',.05);}
   else if(k==='home'){[523,659,784,1047].forEach((f,i)=>tone(f,i*.08,.18,'triangle',.08));}
   else if(k==='win'){[523,659,784,1047,1319,1047,1319,1568].forEach((f,i)=>tone(f,i*.12,.25,'triangle',.08));}
+  else if(k==='turn'){tone(784,0,.1,'triangle',.07);tone(1047,.11,.16,'triangle',.07);}
 }
 $('#snd').onclick=()=>{muted=!muted;$('#snd').classList.toggle('muted',muted);$('#snd').setAttribute('aria-pressed',String(!muted));unlock();savePrefs();};
 
@@ -597,7 +616,7 @@ function showFace(v){
 function renderChips(){
   const host=$('#chips');host.innerHTML='';
   for(const pi of G.act){
-    const d=document.createElement('div');d.className='chip c'+pi+(pi===turnPi?' on':'');d.dataset.pi=pi;
+    const d=document.createElement('div');d.className='chip c'+pi+(pi===turnPi?' on':'')+(online()&&isRemote(pi)?' rem':'');d.dataset.pi=pi;
     const f=G.pos[pi].filter(p=>p===57).length;
     d.innerHTML='<span class="mini">'+PAWN+'</span><span class="who"><b>'+label(pi)+'</b><span class="dots">'+[0,1,2,3].map(k=>'<i class="'+(k<f?'f':'')+'"></i>').join('')+'</span></span>';
     host.append(d);
@@ -743,6 +762,7 @@ async function playerTurn(pi){
   }
   for(const k of [...G.shield])if(k.startsWith(pi+','))G.shield.delete(k);
   layout();
+  if(online()&&!rem)turnAlert();
   for(;;){
     setTurnUI(pi);dieEl.disabled=true;
     if(cpu){say(NAMES[pi]+' tira il dado','');await sleep(650);}
@@ -877,6 +897,31 @@ const newSeed=()=>(Math.random()*4294967296)>>>0;
 function netSend(m){try{if(NET.conn&&NET.open)NET.conn.send(m);}catch(e){}}
 function netView(v){['Choose','HostView','JoinView'].forEach(n=>{$('#net'+n).hidden=n!==v;});netMsg('');}
 
+/* schermo acceso mentre la stanza o la partita online sono aperte: se il telefono si spegne la connessione cade */
+let wl=null,wantAwake=false,wlBusy=false;
+async function keepAwake(on){
+  wantAwake=on;
+  try{
+    if(on){
+      if(wl||wlBusy||!navigator.wakeLock||document.hidden)return;
+      wlBusy=true;
+      const l=await navigator.wakeLock.request('screen');
+      wlBusy=false;
+      if(!wantAwake){l.release().catch(()=>{});return;}
+      wl=l;l.addEventListener('release',()=>{if(wl===l)wl=null;});
+    }else if(wl){const l=wl;wl=null;await l.release();}
+  }catch(e){wlBusy=false;}
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&wantAwake)keepAwake(true);});
+
+/* pallino di connessione: verde, giallo se l'amico non risponde da 7 secondi, rosso se e' caduta */
+function netState(){$('#chips').dataset.net=!NET.open?'off':(Date.now()-NET.last>7000?'slow':'ok');}
+/* tocca a te: due note e una vibrazione leggera, per chi aspetta guardando altrove */
+function turnAlert(){
+  sfx('turn');
+  try{if(navigator.vibrate)navigator.vibrate([70,50,70]);}catch(e){}
+}
+
 let peerLoad=null;
 function loadPeer(){
   if(window.Peer)return Promise.resolve();
@@ -894,6 +939,7 @@ function netReset(bye){
   clearInterval(NET.hb);clearTimeout(NET.to);
   const c=NET.conn,p=NET.peer;
   NET.conn=null;NET.peer=null;NET.open=false;NET.inbox=[];NET.code='';
+  keepAwake(false);netState();
   if(bye&&c&&c.open)try{c.send({k:'bye'});}catch(e){}
   setTimeout(()=>{try{c&&c.close();}catch(e){}try{p&&p.destroy();}catch(e){}},bye&&c?300:0);
 }
@@ -925,7 +971,7 @@ function netPump(){
 
 function netData(c,m){
   if(c!==NET.conn||!m||typeof m!=='object')return;
-  NET.last=Date.now();
+  NET.last=Date.now();netState();
   if(m.k==='die'||m.k==='pick'){if(NET.inbox.length<50){NET.inbox.push(m);netPump();}}
   else if(m.k==='start'){if(!NET.host&&Number.isInteger(m.seed))startOnline(m.seed>>>0,!!m.chaos);}
   else if(m.k==='again'){if(NET.host&&G&&G.mode==='online'&&G.over)rematch();}
@@ -946,9 +992,11 @@ function rematch(){
 function netOpened(c){
   if(c!==NET.conn||NET.open)return;
   NET.open=true;NET.last=Date.now();clearTimeout(NET.to);
+  keepAwake(true);netState();
   NET.hb=setInterval(()=>{
     netSend({k:'ping'});
-    if(Date.now()-NET.last>15000)netLost('Connessione persa','Non arrivano piu\' notizie dal tuo amico.');
+    if(Date.now()-NET.last>15000)netLost('Connessione persa','Non arriva piu\' niente dal tuo amico.');
+    else netState();
   },3000);
   if(NET.host){const seed=newSeed();netSend({k:'start',seed,chaos:chaosOn});startOnline(seed,chaosOn);}
   else netMsg('Collegato! Si parte...');
@@ -968,7 +1016,7 @@ function openNet(view,code){
   ov('net',true);
 }
 async function netHost(){
-  netReset(false);NET.host=true;netView('HostView');
+  netReset(false);NET.host=true;keepAwake(true);netView('HostView');
   $('#netCode').textContent='·····';netMsg('Preparo la stanza...');
   try{await loadPeer();}catch(e){netMsg('Non riesco a collegarmi al servizio. Controlla la connessione e riprova.');return;}
   if($('#net').hidden||NET.host!==true)return;
@@ -989,7 +1037,7 @@ async function netHost(){
 async function netJoin(raw){
   const code=String(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(code.length!==5){netMsg('Il codice ha 5 caratteri.');return;}
-  netReset(false);NET.host=false;netMsg('Mi collego...');
+  netReset(false);NET.host=false;keepAwake(true);netMsg('Mi collego...');
   try{await loadPeer();}catch(e){netMsg('Non riesco a collegarmi al servizio. Controlla la connessione e riprova.');return;}
   if($('#net').hidden)return;
   const peer=new Peer();NET.peer=peer;
